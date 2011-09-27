@@ -7,21 +7,15 @@
  */
 class Caching_Jelly_Builder extends Jelly_Core_Builder {
 
+	protected $_cache;
+
 	public function __construct($model = NULL, $key = NULL)
 	{
-		Cache::$default = 'sqlite';
+		$this->_config = Kohana::$config->load('jelly_caching');
 
-		// Get a cache instance
-		$cache_file = Cache::instance();
-
-		// Set a GC probability of 15%
-		$gc = 15;
-
-		// If the GC probability is a hit
-		if (rand(0,99) <= $gc and $cache_file instanceof Kohana_Cache_GarbageCollect)
+		if($this->_config->available)
 		{
-		  // Garbage Collect
-		  $cache_file->garbage_collect();
+			$this->_cache = Cache::instance('sqlite');
 		}
 
 		parent::__construct($model, $key);
@@ -61,8 +55,12 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 	    // Make cache id based on sql query to avoid information crossing
 		$id = md5($this->__toString());
 
-		// Extract cached data if it exists
-		$result = Cache::instance()->get($id);
+		$result = NULL;
+		if($this->_config->available)
+		{
+			// Extract cached data if it exists
+			$result = $this->_cache->get($id);
+		}
 
 		// Make cache routine if result is empty
 		if( ! $result)
@@ -73,9 +71,9 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 			$result = new Jelly_Collection($this->_result->execute($db), $this->_as_object);
 
 		    // Set cache data
-			if(Kohana::$caching)
+			if($this->_config->available)
 			{
-				Cache::instance()->set_with_tags($id, $result, NULL, array($model));
+				$this->_cache->set_with_tags($id, $result, NULL, array($model));
 			}
 		}
 
@@ -115,8 +113,11 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 		// Ready to leave the builder
 		$result = $this->_build(Database::INSERT)->execute($db);
 
-		$model = ($this->_meta) ? $this->_meta->model() : $this->_model;
-	    Cache::instance()->delete_tag($model);
+		if($this->_config->available)
+		{
+			$model = ($this->_meta) ? $this->_meta->model() : $this->_model;
+			$this->_cache->delete_tag($model);
+		}
 
 		// Trigger after_query callbacks
 		$meta AND $meta->events()->trigger('builder.after_insert', $this);
@@ -141,8 +142,11 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 		// Ready to leave the builder
 		$result = $this->_build(Database::UPDATE)->execute($db);
 
-		$model = ($this->_meta) ? $this->_meta->model() : $this->_model;
-	    Cache::instance()->delete_tag($model);
+		if($this->_config->available)
+		{
+			$model = ($this->_meta) ? $this->_meta->model() : $this->_model;
+			$this->_cache->delete_tag($model);
+		}
 
 		// Trigger after_query callbacks
 		$meta AND $meta->events()->trigger('builder.after_update', $this);
@@ -173,8 +177,11 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 		{
 			$result = $this->_build(Database::DELETE)->execute($db);
 
-		    $model = ($this->_meta) ? $this->_meta->model() : $this->_model;
-	        Cache::instance()->delete_tag($model);
+			if($this->_config->available)
+			{
+				$model = ($this->_meta) ? $this->_meta->model() : $this->_model;
+				$this->_cache->delete_tag($model);
+			}
 		}
 
 		// Trigger after_query callbacks
@@ -210,8 +217,12 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 	    // Make cache id based on sql query to avoid information crossing
 		$id = md5('count_'.$this->__toString());
 
-	    // Extract cached data if it exists
-		$result = Cache::instance()->get($id);
+		$result = NULL;
+		if($this->_config->available)
+		{
+			// Extract cached data if it exists
+			$result = Cache::instance()->get($id);
+		}
 
 		// Make cache routine if result is empty
 		if( ! $result)
@@ -223,10 +234,11 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 		               ->select(array('COUNT("*")', 'total'))
 		               ->execute($db)
 		               ->get('total');
+
 		    // Set cache data
-			if(Kohana::$caching)
+			if($this->_config->available)
 			{
-				Cache::instance()->set_with_tags($id, $result, NULL, array($model));
+				$this->_cache->set_with_tags($id, $result, NULL, array($model));
 			}
 		}
 
