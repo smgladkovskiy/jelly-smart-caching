@@ -221,11 +221,11 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 		if($this->_config->available)
 		{
 			// Extract cached data if it exists
-			$result = Cache::instance()->get($id);
+			$result = $this->_cache->get($id, NULL);
 		}
 
 		// Make cache routine if result is empty
-		if( ! $result)
+		if($result === NULL)
 		{
 			$model = ($this->_meta) ? $this->_meta->model() : $this->_model;
 

@@ -21,15 +21,13 @@ class Cache_Sqlite extends Kohana_Cache_Sqlite {
 		}
 
 		// Load new Sqlite DB
-		$this->_db = new PDO('sqlite:'.$database,'', '', array(
-	        PDO::ATTR_PERSISTENT => TRUE
-		));
+		$this->_db = new PDO('sqlite:'.$database,'', '', $this->_config['PDO_config']);
 
 		// Test for existing DB
-		$result = $this->_db->query("SELECT * FROM sqlite_master WHERE name = 'caches".$this->_config['suffix']."' AND type = 'table'")->fetchAll();
+		$result = $this->_db->query("SELECT * FROM sqlite_master WHERE name = 'caches' AND type = 'table'")->fetchAll();
 
 		// If there is no table, create a new one
-		if (0 == count($result))
+		if (count($result) == 0)
 		{
 			$database_schema = Arr::get($this->_config, 'schema', NULL);
 
@@ -41,11 +39,22 @@ class Cache_Sqlite extends Kohana_Cache_Sqlite {
 			try
 			{
 				// Create the caches table
-				$this->_db->query(Arr::get($this->_config, 'schema', NULL));
+				$this->_db->query($database_schema);
 			}
 			catch (PDOException $e)
 			{
-				throw new Cache_Exception('Failed to create new SQLite caches'.$this->_config['suffix'].' table with the following error : :error', array(':error' => $e->getMessage()));
+				throw new Cache_Exception('Failed to create new SQLite caches table with the following error : :error', array(':error' => $e->getMessage()));
+			}
+		}
+		else
+		{
+			$gc = $this->_config['gc_probability'];
+
+			// If the GC probability is a hit
+			if (rand(0,99) <= $gc)
+			{
+			  // Garbage Collect
+			  $this->garbage_collect();
 			}
 		}
 	}
@@ -61,7 +70,7 @@ class Cache_Sqlite extends Kohana_Cache_Sqlite {
 	public function get($id, $default = NULL)
 	{
 		// Prepare statement
-		$statement = $this->_db->prepare('SELECT id, expiration, cache FROM caches'.$this->_config['suffix'].' WHERE id = :id LIMIT 0, 1');
+		$statement = $this->_db->prepare('SELECT id, expiration, cache FROM caches WHERE id = :id LIMIT 0, 1');
 
 		// Try and load the cache based on id
 		try
@@ -126,7 +135,7 @@ class Cache_Sqlite extends Kohana_Cache_Sqlite {
 	public function delete($id)
 	{
 		// Prepare statement
-		$statement = $this->_db->prepare('DELETE FROM caches'.$this->_config['suffix'].' WHERE id = :id');
+		$statement = $this->_db->prepare('DELETE FROM caches WHERE id = :id');
 
 		// Remove the entry
 		try
@@ -149,7 +158,7 @@ class Cache_Sqlite extends Kohana_Cache_Sqlite {
 	public function delete_all()
 	{
 		// Prepare statement
-		$statement = $this->_db->prepare('DELETE FROM caches'.$this->_config['suffix'].'');
+		$statement = $this->_db->prepare('DELETE FROM caches');
 
 		// Remove the entry
 		try
@@ -185,16 +194,16 @@ class Cache_Sqlite extends Kohana_Cache_Sqlite {
 		// Setup lifetime
 		if ($lifetime === NULL)
 		{
-			$lifetime = (0 === Arr::get('default_expire', NULL)) ? 0 : (Arr::get($this->_config, 'default_expire', Cache::DEFAULT_EXPIRE) + time());
+			$lifetime = time() + Arr::get($this->_config, 'default_expire', Cache::DEFAULT_EXPIRE);
 		}
 		else
 		{
-			$lifetime = (0 === $lifetime) ? 0 : ($lifetime + time());
+			$lifetime = ($lifetime === 0) ? 0 : (time() + $lifetime);
 		}
 
 		// Prepare statement
 		// $this->exists() may throw Cache_Exception, no need to catch/rethrow
-		$statement = $this->exists($id) ? $this->_db->prepare('UPDATE caches'.$this->_config['suffix'].' SET expiration = :expiration, cache = :cache, tags = :tags WHERE id = :id') : $this->_db->prepare('INSERT INTO caches'.$this->_config['suffix'].' (id, cache, expiration, tags) VALUES (:id, :cache, :expiration, :tags)');
+		$statement = $this->exists($id) ? $this->_db->prepare('UPDATE caches SET expiration = :expiration, cache = :cache, tags = :tags WHERE id = :id') : $this->_db->prepare('INSERT INTO caches (id, cache, expiration, tags) VALUES (:id, :cache, :expiration, :tags)');
 
 		// Try to insert
 		try
@@ -220,7 +229,7 @@ class Cache_Sqlite extends Kohana_Cache_Sqlite {
 	public function delete_tag($tag)
 	{
 		// Prepare the statement
-		$statement = $this->_db->prepare('DELETE FROM caches'.$this->_config['suffix'].' WHERE tags LIKE :tag');
+		$statement = $this->_db->prepare('DELETE FROM caches WHERE tags LIKE :tag');
 
 		// Try to delete
 		try
@@ -245,7 +254,7 @@ class Cache_Sqlite extends Kohana_Cache_Sqlite {
 	public function find($tag)
 	{
 		// Prepare the statement
-		$statement = $this->_db->prepare('SELECT id, cache FROM caches'.$this->_config['suffix'].' WHERE tags LIKE :tag');
+		$statement = $this->_db->prepare('SELECT id, cache FROM caches WHERE tags LIKE :tag');
 
 		// Try to find
 		try
@@ -285,7 +294,7 @@ class Cache_Sqlite extends Kohana_Cache_Sqlite {
 	public function garbage_collect()
 	{
 		// Create the sequel statement
-		$statement = $this->_db->prepare('DELETE FROM caches'.$this->_config['suffix'].' WHERE expiration < :expiration');
+		$statement = $this->_db->prepare('DELETE FROM caches WHERE expiration < :expiration');
 
 		try
 		{
@@ -306,7 +315,7 @@ class Cache_Sqlite extends Kohana_Cache_Sqlite {
 	 */
 	protected function exists($id)
 	{
-		$statement = $this->_db->prepare('SELECT id FROM caches'.$this->_config['suffix'].' WHERE id = :id');
+		$statement = $this->_db->prepare('SELECT id FROM caches WHERE id = :id');
 		try
 		{
 			$statement->execute(array(':id' => $this->_sanitize_id($id)));
