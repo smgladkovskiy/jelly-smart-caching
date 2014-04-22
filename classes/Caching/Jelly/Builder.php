@@ -26,7 +26,7 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 	 * @param   string  $db
 	 * @return  Jelly_Collection | Jelly_Model
 	 */
-	public function select($db = NULL)
+	public function select_all($db = NULL)
 	{
 		$db   = $this->_db($db);
 		$meta = $this->_meta;
@@ -35,8 +35,9 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 		{
 			// Select all of the columns for the model if we haven't already
 			empty($this->_select) AND $this->select_column('*');
+
 			// Trigger before_select callback
-			if(is_object($meta->events())) $meta->events()->trigger('builder.before_select', $this);
+			$meta->events()->trigger('builder.before_select', $this);
 		}
 
 		// Ready to leave the builder, we need to figure out what type to return
@@ -65,7 +66,18 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 		// Make cache routine if result is empty
 		if( ! $result)
 		{
-			$model = ($this->_meta) ? $this->_meta->model() : $this->_model;
+			$models[] = ($meta) ? $meta->model() : $this->_model;
+
+			if(($meta))
+			{
+				foreach($meta->fields() as $field)
+				{
+					if($field instanceof Jelly_Field_Manytomany)
+					{
+						$models[] = $field->model;
+					}
+				}
+			}
 
 			// Pass off to Jelly_Collection, which manages the result
 			$result = new Jelly_Collection($this->_result->execute($db), $this->_as_object);
@@ -73,7 +85,7 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 		    // Set cache data
 			if($this->_config->available)
 			{
-				$this->_cache->set_with_tags($id, $result, NULL, array($model));
+				$this->_cache->set_with_tags($id, $result, NULL, $models);
 			}
 		}
 
@@ -83,14 +95,7 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 		// Trigger after_query callbacks
 		if ($meta)
 		{
-			if(is_object($meta->events())) $meta->events()->trigger('builder.after_select', $this);
-		}
-
-		// If the record was limited to 1, we only return that model
-		// Otherwise we return the whole result set.
-		if ($this->_limit === 1)
-		{
-			$this->_result = $this->_result->current();
+			$meta->events()->trigger('builder.after_select', $this);
 		}
 
 		return $this->_result;
@@ -115,8 +120,26 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 
 		if($this->_config->available)
 		{
-			$model = ($this->_meta) ? $this->_meta->model() : $this->_model;
-			$this->_cache->delete_tag($model);
+			$model = ($meta) ? $meta->model() : $this->_model;
+			$models[$model] = $model;
+
+			if($meta)
+			{
+				foreach($meta->fields() as $field)
+				{
+					if($field instanceof Jelly_Field_Manytomany)
+					{
+						$models[$field->through['model']] = $field->through['model'];
+					}
+
+					if($meta->cross_table AND $field instanceof Jelly_Field_Belongsto)
+					{
+						$models[$field->foreign['model']] = $field->foreign['model'];
+					}
+				}
+			}
+
+			$this->_cache->delete_tag(array_values($models));
 		}
 
 		// Trigger after_query callbacks
@@ -144,8 +167,26 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 
 		if($this->_config->available)
 		{
-			$model = ($this->_meta) ? $this->_meta->model() : $this->_model;
-			$this->_cache->delete_tag($model);
+			$model = ($meta) ? $meta->model() : $this->_model;
+			$models[$model] = $model;
+
+			if($meta)
+			{
+				foreach($meta->fields() as $field)
+				{
+					if($field instanceof Jelly_Field_Manytomany)
+					{
+						$models[$field->through['model']] = $field->through['model'];
+					}
+
+					if($meta->cross_table AND $field instanceof Jelly_Field_Belongsto)
+					{
+						$models[$field->foreign['model']] = $field->foreign['model'];
+					}
+				}
+			}
+
+			$this->_cache->delete_tag(array_values($models));
 		}
 
 		// Trigger after_query callbacks
@@ -179,8 +220,26 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 
 			if($this->_config->available)
 			{
-				$model = ($this->_meta) ? $this->_meta->model() : $this->_model;
-				$this->_cache->delete_tag($model);
+				$model = ($meta) ? $meta->model() : $this->_model;
+				$models[$model] = $model;
+
+				if($meta)
+				{
+					foreach($meta->fields() as $field)
+					{
+						if($field instanceof Jelly_Field_Manytomany)
+						{
+							$models[$field->through['model']] = $field->through['model'];
+						}
+
+						if($meta->cross_table AND $field instanceof Jelly_Field_Belongsto)
+						{
+							$models[$field->foreign['model']] = $field->foreign['model'];
+						}
+					}
+				}
+
+				$this->_cache->delete_tag(array_values($models));
 			}
 		}
 
@@ -214,7 +273,7 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 		// Dump a few unecessary bits that cause problems
 		$query->_select = $query->_order_by = array();
 
-	    // Make cache id based on sql query to avoid information crossing
+		// Make cache id based on sql query to avoid information crossing
 		$id = md5('count_'.$this->__toString());
 
 		$result = NULL;
@@ -227,18 +286,30 @@ class Caching_Jelly_Builder extends Jelly_Core_Builder {
 		// Make cache routine if result is empty
 		if($result === NULL)
 		{
-			$model = ($this->_meta) ? $this->_meta->model() : $this->_model;
+			$models[] = ($this->_meta) ? $this->_meta->model() : $this->_model;
 
-		    // Find the count
+			if($this->_meta)
+			{
+				foreach($this->_meta->fields() as $field)
+				{
+					if($field instanceof Jelly_Field_Manytomany)
+					{
+						$models[] = $field->model;
+					}
+				}
+			}
+
+			// Find the count
 			$result = (int) $query
-		               ->select(array('COUNT("*")', 'total'))
-		               ->execute($db)
-		               ->get('total');
+				->select(array(DB::expr('COUNT("*")'), 'total'))
+				->execute($db)
+				->get('total')
+			;
 
-		    // Set cache data
+			// Set cache data
 			if($this->_config->available)
 			{
-				$this->_cache->set_with_tags($id, $result, NULL, array($model));
+				$this->_cache->set_with_tags($id, $result, NULL, $models);
 			}
 		}
 

@@ -3,63 +3,6 @@
 class Cache_Sqlite extends Kohana_Cache_Sqlite {
 
 	/**
-	 * Sets up the PDO SQLite table and
-	 * initialises the PDO connection
-	 *
-	 * @param  array     configuration
-	 * @throws  Cache_Exception
-	 */
-	protected function __construct(array $config)
-	{
-		parent::__construct($config);
-
-		$database = Arr::get($this->_config, 'database', NULL);
-
-		if ($database === NULL)
-		{
-			throw new Cache_Exception('Database path not available in Kohana Cache configuration');
-		}
-
-		// Load new Sqlite DB
-		$this->_db = new PDO('sqlite:'.$database,'', '', $this->_config['PDO_config']);
-
-		// Test for existing DB
-		$result = $this->_db->query("SELECT * FROM sqlite_master WHERE name = 'caches' AND type = 'table'")->fetchAll();
-
-		// If there is no table, create a new one
-		if (count($result) == 0)
-		{
-			$database_schema = Arr::get($this->_config, 'schema', NULL);
-
-			if ($database_schema === NULL)
-			{
-				throw new Cache_Exception('Database schema not found in Kohana Cache configuration');
-			}
-
-			try
-			{
-				// Create the caches table
-				$this->_db->query($database_schema);
-			}
-			catch (PDOException $e)
-			{
-				throw new Cache_Exception('Failed to create new SQLite caches table with the following error : :error', array(':error' => $e->getMessage()));
-			}
-		}
-		else
-		{
-			$gc = $this->_config['gc_probability'];
-
-			// If the GC probability is a hit
-			if (rand(0,99) <= $gc)
-			{
-			  // Garbage Collect
-			  $this->garbage_collect();
-			}
-		}
-	}
-
-	/**
 	 * Retrieve a value based on an id
 	 *
 	 * @param   string   id
@@ -221,27 +164,37 @@ class Cache_Sqlite extends Kohana_Cache_Sqlite {
 	/**
 	 * Delete cache entries based on a tag
 	 *
-	 * @param   string   tag
+	 * @param   string|array   tag
 	 * @param   integer  timeout [Optional]
 	 * @return  boolean
 	 * @throws  Cache_Exception
 	 */
 	public function delete_tag($tag)
 	{
-		// Prepare the statement
-		$statement = $this->_db->prepare('DELETE FROM caches WHERE tags LIKE :tag');
-
-		// Try to delete
-		try
+		if(is_string($tag))
 		{
-			$statement->execute(array(':tag' => "%<{$tag}>%"));
-		}
-		catch (PDOException $e)
-		{
-			throw new Cache_Exception('There was a problem querying the local SQLite3 cache. :error', array(':error' => $e->getMessage()));
-		}
+			// Prepare the statement
+			$statement = $this->_db->prepare('DELETE FROM caches WHERE tags LIKE :tag');
 
-		return (bool) $statement->rowCount();
+			// Try to delete
+			try
+			{
+				$statement->execute(array(':tag' => "%<{$tag}>%"));
+			}
+			catch (PDOException $e)
+			{
+				throw new Cache_Exception('There was a problem querying the local SQLite3 cache. :error', array(':error' => $e->getMessage()));
+			}
+
+			return (bool) $statement->rowCount();
+		}
+		elseif(is_array($tag))
+		{
+			foreach($tag as $_tag)
+			{
+				$this->delete_tag($_tag);
+			}
+		}
 	}
 
 	/**
