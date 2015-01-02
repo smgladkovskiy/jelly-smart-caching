@@ -1,0 +1,31 @@
+{
+    "name": "smgladkovskiy/jelly-smart-caching",
+    "description": "Some magic to enable smart tag-based caching in Jelly (the best Kohana orm library).",
+    "license": "MIT",
+    "type": "kohana-module",
+    "authors": [
+        {
+            "name": "SMGladkovskiy",
+            "email": "smgladkovskiy@gmail.com"
+        }
+    ],
+    "require": {
+        "smgladkovskiy/jelly": "~3.1.0",
+        "kohana/cache": "~3.3.3"
+    },
+    "repositories": [
+        {
+            "url": "https://github.com/smgladkovskiy/jelly.git",
+            "type": "git"
+        }
+    ],
+    "extra": {
+        "branch-alias": {
+            "dev-3.3/develop": "3.3.x-dev",
+            "dev-3.4/develop": "3.4.x-dev"
+        },
+        "installer-paths": {
+            "vendor/{$vendor}/{$name}": ["type:kohana-module"]
+        }
+    }
+}
